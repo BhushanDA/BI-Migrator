@@ -1,6 +1,7 @@
 import streamlit as st
 import openai
 import os
+import pandas as pd
 
 # Function to convert scripts between languages using OpenAI API
 def convert_script(source_script, source_language, target_language, api_key):
@@ -83,6 +84,16 @@ st.markdown("""
         color: #FFFFFF;  /* White text for the label above the input */
         font-size: 1.1em;  /* Slightly larger label text */
     }
+    .stTextArea>div>div>textarea {
+        background-color: #333333;  /* Dark grey background for text area */
+        color: #FFFFFF;  /* White text for text area */
+        border: 1px solid #444444;  /* Slightly lighter grey border */
+        border-radius: 4px;
+        padding: 10px;
+    }
+    .stTextArea label {
+        color: #FFFFFF;  /* White text for the label above the text area */
+    }
     /* Targeting the title (h1) to make the text white */
     h1 {
         color: #FFFFFF !important;  /* White color for the title text */
@@ -101,26 +112,48 @@ source_language = st.selectbox("Source Language:", ["Qlik", "SQL", "Power BI DAX
 target_language = st.selectbox("Target Language:", ["Qlik", "SQL", "Power BI DAX", "Looker", "Python", "R", "JavaScript"])
 
 # File Upload
-uploaded_file = st.file_uploader("Upload Script File:")
+uploaded_file = st.file_uploader("Upload Bulk File:", type=["txt", "xlsx"])
 
-if st.button("Convert"):
+if st.button("Convert File"):
     if not api_key:
         st.error("API key is required")
     elif not uploaded_file:
         st.error("No file uploaded")
     else:
         # Read and process the uploaded file
-        file_content = uploaded_file.read().decode('utf-8')
-        scripts = file_content.splitlines()
+        if uploaded_file.name.endswith('.txt'):
+            file_content = uploaded_file.read().decode('utf-8')
+            scripts = file_content.splitlines()
+        elif uploaded_file.name.endswith('.xlsx'):
+            df = pd.read_excel(uploaded_file)
+            scripts = df.iloc[:, 0].tolist()  # Assuming scripts are in the first column
 
         # Convert scripts using OpenAI API
         converted_scripts = [convert_script(script, source_language, target_language, api_key) for script in scripts]
 
-        output_filename = 'converted_scripts.txt'
-        with open(output_filename, 'w') as output_file:
-            for script in converted_scripts:
-                output_file.write(script + "\n")
+        if uploaded_file.name.endswith('.txt'):
+            output_filename = 'converted_scripts.txt'
+            with open(output_filename, 'w') as output_file:
+                for script in converted_scripts:
+                    output_file.write(script + "\n")
+            st.download_button("Download Converted Scripts", data=open(output_filename).read(), file_name=output_filename)
+        elif uploaded_file.name.endswith('.xlsx'):
+            output_filename = 'converted_scripts.xlsx'
+            df_converted = pd.DataFrame(converted_scripts, columns=['Converted Script'])
+            df_converted.to_excel(output_filename, index=False)
+            st.download_button("Download Converted Scripts", data=open(output_filename, 'rb').read(), file_name=output_filename)
 
         st.success("File converted successfully!")
-        st.download_button("Download Converted Scripts", data=open(output_filename).read(), file_name=output_filename)
+
+# Text area for small expressions
+small_expression = st.text_area("Enter a small expression to convert:")
+
+if st.button("Convert Expression"):
+    if not api_key:
+        st.error("API key is required")
+    elif not small_expression:
+        st.error("No expression entered")
+    else:
+        converted_expression = convert_script(small_expression, source_language, target_language, api_key)
+        st.text_area("Converted Expression:", value=converted_expression, height=200)
 
